@@ -1,0 +1,34 @@
+version: "3.8"
+
+services:
+  mongo-sensor:
+    image: mongo
+    container_name: mongo-sensor
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-sensor-data:/data/db
+    networks:
+      - dhtnet
+
+  node-sensor:
+    build: ./node-sensor
+    container_name: node-sensor
+    restart: always
+    depends_on:
+      - mongo-sensor
+    command: node index.js
+    environment:
+      - MONGO_URL=mongodb://mongo-sensor:27017/dht
+    devices:
+      - "/dev/mem" # Potrzebne dla node-dht-sensor
+    privileged: true
+    networks:
+      - dhtnet
+
+volumes:
+  mongo-sensor-data:
+
+networks:
+  dhtnet:

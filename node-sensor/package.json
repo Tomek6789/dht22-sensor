@@ -1,0 +1,12 @@
+{
+  "name": "dht22-sensor",
+  "version": "1.0.0",
+  "main": "index.js",
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "mongodb": "^5.7.0",
+    "node-dht-sensor": "^0.4.5"
+  }
+}
