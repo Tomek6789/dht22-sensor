@@ -1,0 +1,190 @@
+#include <Wire.h>
+#include <Arduino.h>
+#include <ESP8266WiFi.h>
+#include <PubSubClient.h>
+
+// ====== KONFIGURACJA ADS1100 ======
+#define ADS1100_ADDR 0x48
+#define ADS1100_CONFIG 0b10000100
+
+#define ADC_VREF 2.048
+#define VIN_DIVIDER_RATIO 24.3
+#define SCALE_M_PER_S_PER_V 3.0
+
+#define OFFSET_MV 0.0
+#define MEDIAN_WINDOW 5
+#define CONVERSION_DELAY_MS 150
+
+// ====== WIFI ======
+const char* WIFI_SSID = "TP-Link_9676";
+const char* WIFI_PASS = "lody_pistacjowe";
+
+// ====== MQTT ======
+const char* MQTT_HOST = "192.168.0.100";   // IP Raspberry Pi
+const int   MQTT_PORT = 1883;
+const char* MQTT_CLIENT_ID = "esp8266-anemometr";
+
+const char* MQTT_TOPIC = "weather/anemometer";
+
+WiFiClient espClient;
+PubSubClient mqtt(espClient);
+
+void connectWiFi() {
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+
+  Serial.print("WiFi...");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.println("\nWiFi OK, IP: " + WiFi.localIP().toString());
+}
+
+void connectMQTT() {
+  while (!mqtt.connected()) {
+    Serial.print("MQTT...");
+    if (mqtt.connect(MQTT_CLIENT_ID)) {
+      Serial.println(" OK");
+    } else {
+      Serial.print(" FAIL, rc=");
+      Serial.println(mqtt.state());
+      delay(2000);
+    }
+  }
+}
+
+
+
+// ====== BUFOR MEDIANY ======
+float buf_mv[MEDIAN_WINDOW];
+int buf_len = 0;
+
+// ====== DEKODOWANIE GAIN ======
+int decodeGainFromStatus(uint8_t status) {
+  uint8_t pga_bits = (status >> 3) & 0b11;
+  switch (pga_bits) {
+    case 0b00: return 1;
+    case 0b01: return 2;
+    case 0b10: return 4;
+    case 0b11: return 8;
+  }
+  return 1;
+}
+
+// ====== RAW → NAPIĘCIE ADC ======
+float rawToAdcVoltage(int16_t raw, int gain) {
+  float fs_adc_v = ADC_VREF / gain;
+  float v_adc = (raw / 32768.0) * fs_adc_v;
+  return v_adc < 0.0 ? 0.0 : v_adc;
+}
+
+// ====== MEDIANA ======
+float median(float *arr, int len) {
+  float temp[len];
+  memcpy(temp, arr, len * sizeof(float));
+
+  for (int i = 0; i < len - 1; i++) {
+    for (int j = i + 1; j < len; j++) {
+      if (temp[j] < temp[i]) {
+        float t = temp[i];
+        temp[i] = temp[j];
+        temp[j] = t;
+      }
+    }
+  }
+
+  if (len % 2 == 1) {
+    return temp[len / 2];
+  } else {
+    return 0.5 * (temp[len / 2 - 1] + temp[len / 2]);
+  }
+}
+
+// ====== SETUP ======
+void setup() {
+  Serial.begin(115200);
+  delay(200);
+
+  Wire.begin(D2, D1);
+
+  connectWiFi();
+  mqtt.setServer(MQTT_HOST, MQTT_PORT);
+
+  Serial.println("Start pomiaru anemometru (ADS1100)");
+}
+
+// ====== LOOP ======
+void loop() {
+  // Wymuś konfigurację ADS1100
+  Wire.beginTransmission(ADS1100_ADDR);
+  Wire.write(ADS1100_CONFIG);
+  Wire.endTransmission();
+
+  delay(CONVERSION_DELAY_MS);
+
+  // Odczyt 3 bajtów
+  Wire.requestFrom(ADS1100_ADDR, 3);
+  if (Wire.available() < 3) {
+    Serial.println("Błąd I2C");
+    delay(1000);
+    return;
+  }
+
+  uint8_t b0 = Wire.read();
+  uint8_t b1 = Wire.read();
+  uint8_t status = Wire.read();
+
+  int16_t raw = (b0 << 8) | b1;
+  if (raw & 0x8000) raw -= 65536;
+
+  int gain = decodeGainFromStatus(status);
+
+  float v_adc = rawToAdcVoltage(raw, gain);
+  float v_vin = v_adc * VIN_DIVIDER_RATIO;
+
+  float mv = v_vin * 1000.0;
+  float mv_effective = mv < OFFSET_MV ? 0.0 : mv;
+
+  // bufor mediany
+  if (buf_len < MEDIAN_WINDOW) {
+    buf_mv[buf_len++] = mv_effective;
+  } else {
+    for (int i = 1; i < MEDIAN_WINDOW; i++) {
+      buf_mv[i - 1] = buf_mv[i];
+    }
+    buf_mv[MEDIAN_WINDOW - 1] = mv_effective;
+  }
+
+  float mv_filtered = median(buf_mv, buf_len);
+  float v_filtered = mv_filtered / 1000.0;
+  float speed = v_filtered * SCALE_M_PER_S_PER_V;
+
+  mqtt.loop();
+  if (!mqtt.connected()) {
+    connectMQTT();
+  }
+
+  char payload[128];
+  snprintf(
+    payload, sizeof(payload),
+    "{\"vin\":%.3f,\"speed\":%.2f}",
+    v_filtered,
+    speed
+  );
+
+  mqtt.publish(MQTT_TOPIC, payload);
+
+  Serial.printf(
+    "BYTES: %02X %02X %02X | RAW: %6d STATUS: 0x%02X GAIN: %d | "
+    "ADC: %.3f V | VIN: %.3f V (%.0f mV) | Predkosc: %.2f m/s\n",
+    b0, b1, status,
+    raw, status, gain,
+    v_adc,
+    v_filtered, mv_filtered,
+    speed
+  );
+
+  delay(1000);
+}
