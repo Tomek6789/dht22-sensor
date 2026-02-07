@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+    <title>Temperatura i Wilgotność</title>
+</head>
+<body>
+    <h1>Temperatura - {{ current_temp }}</h1>
+    <canvas id="temperatureChart" width="900" height="400"></canvas>
+    <h1>Wilgotność</h1>
+    <canvas id="humidityChart" width="900" height="400"></canvas>
+    <h1>Prędkość wiatru - {{ current_wind }}</h1>
+    <canvas id="windSpeedChart" width="900" height="400"></canvas>
+    <script>
+    const labels = {{ labels|tojson }};
+    // Temperature chart
+    const tempCtx = document.getElementById('temperatureChart').getContext('2d');
+    const temperatureChart = new Chart(tempCtx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Temperatura',
+                    data: {{ temp|tojson }},
+                    borderColor: 'rgba(255, 99, 132, 1)',
+                    borderWidth: 2,
+                    lineTension: 0.1,
+                    fill: false
+                }
+            ]
+        },
+        options: {
+            responsive: false,
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Data'
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Temperatura (°C)'
+                    }
+                }
+            }
+        }
+    });
+
+    // Humidity chart
+    const humCtx = document.getElementById('humidityChart').getContext('2d');
+    const humidityChart = new Chart(humCtx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Wilgotność',
+                    data: {{ humidity|tojson }},
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    borderWidth: 2,
+                    lineTension: 0.1,
+                    fill: false
+                }
+            ]
+        },
+        options: {
+            responsive: false,
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Data'
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Wilgotność (%)'
+                    }
+                }
+            }
+        }
+    });
+
+    // Wind speed chart
+    const windCtx = document.getElementById('windSpeedChart').getContext('2d');
+    const windSpeedChart = new Chart(windCtx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Prędkość wiatru',
+                    data: {{ wind|tojson }},
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    borderWidth: 2,
+                    lineTension: 0.1,
+                    fill: false
+                }
+            ]
+        },
+        options: {
+            responsive: false,
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Data'
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Prędkość wiatru (m/s)'
+                    }
+                }
+            }
+        }
+    });
+    </script>
+</body>
+</html>

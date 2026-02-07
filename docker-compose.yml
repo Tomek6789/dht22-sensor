@@ -1,0 +1,59 @@
+services:
+  app:
+    build: ./raspberrypi-dht-reader
+    container_name: python-dht22
+    restart: always
+    privileged: true
+    devices:
+      - /dev/gpiochip0:/dev/gpiochip0
+    depends_on:
+      - mongo
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/
+    command: ["python", "run.py", "DHT22", "/dev/gpiochip0", "4", "60"]
+
+  flask:
+    build: ./flask-chart
+    container_name: python-flask-app
+    restart: always
+    ports:
+      - "5000:5000"
+    depends_on:
+      - mongo
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/
+
+  grafana:
+    image: grafana/grafana
+    container_name: dht22-grafana
+    restart: always
+    ports:
+      - "3001:3000"
+    depends_on:
+      - mongo
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+
+
+  mqtt-bridge:
+    build: ./mqtt-bridge
+    container_name: mqtt-bridge
+    restart: unless-stopped
+    depends_on:
+      - mongo
+
+  mongo:
+    image: mongo
+    container_name: dht2-mongo
+    restart: always
+    ports:
+      - "27018:27017"
+    volumes:
+      - dht22-mongo-data:/data/db
+
+volumes:
+  dht22-mongo-data:
