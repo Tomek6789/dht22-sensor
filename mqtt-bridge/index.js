@@ -2,7 +2,7 @@ import mqtt from "mqtt";
 import { MongoClient } from "mongodb";
 
 const MQTT_URL = "mqtt://host.docker.internal:1883";
-const MONGO_URL = "mongodb://mongo_wind:27017";
+const MONGO_URL = "mongodb://mongo:27017";
 
 const TOPIC = "weather/anemometer";
 
