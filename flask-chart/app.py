@@ -52,6 +52,7 @@ def home():
     temp = [r.get("temperature_c") for r in filtered]
     humidity = [r.get("humidity") for r in filtered]
     current_temp = readings[-1].get("temperature_c") if readings else None
+    current_humidity = readings[-1].get("humidity") if readings else None
 
     # ---------- WIATR ----------
     now = datetime.now()
@@ -69,7 +70,9 @@ def home():
     #    if r["timestamp"].minute in (0, 30)
     #]
 
-    wind_speed = [r.get("speed") for r in list(wind_collection.find())]
+    wind_readings_all = list(wind_collection.find())
+    wind_speed = [r.get("speed") for r in wind_readings_all]
+    current_wind = wind_readings_all[-1].get("speed_kmh") if wind_readings_all else None
 
     return render_template(
         "graph.html",
@@ -77,8 +80,9 @@ def home():
         temp=temp,
         humidity=humidity,
         wind=wind_speed,
-        current_wind=wind_speed[-1] if wind_speed else None,
-	current_temp=current_temp
+        current_wind=current_wind,
+        current_temp=current_temp,
+        current_humidity=current_humidity
     )
 
 # ===============================
@@ -94,6 +98,19 @@ def api_readings():
             r["time"] = ts.replace(" ", "T") + "Z"
             del r["timestamp"]
     return jsonify(data)
+
+@app.route("/api/readings/latest")
+def latest_reading():
+    reading = dht_collection.find_one(
+        {},
+        {"_id": 0},
+        sort=[("timestamp", -1)]
+    )
+
+    if not reading:
+        return jsonify({})
+
+    return jsonify(reading)
 
 # ===============================
 # API: WIATR
