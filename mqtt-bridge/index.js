@@ -10,31 +10,57 @@ console.log("🔌 MQTT:", MQTT_URL);
 console.log("🗄 Mongo:", MONGO_URL);
 
 const mongo = new MongoClient(MONGO_URL);
-await mongo.connect();
 
-const db = mongo.db("weather");
-const wind = db.collection("wind");
+try {
+  console.log("Connecting to Mongo...");
 
-const mqttClient = mqtt.connect(MQTT_URL);
+  await mongo.connect();
 
-mqttClient.on("connect", () => {
-  console.log("✅ MQTT connected");
-  mqttClient.subscribe(TOPIC);
-});
+  console.log("✅ Mongo connected");
 
-mqttClient.on("message", async (topic, payload) => {
-  try {
-    const data = JSON.parse(payload.toString());
+  const db = mongo.db("weather");
+  const wind = db.collection("wind");
 
-    await wind.insertOne({
-      speed: data.speed,        // m/s
-      vin: data.vin,            // napięcie z ADC
-      source: "esp8266",
-      timestamp: new Date()
+  console.log("Connecting to MQTT...");
+
+  const mqttClient = mqtt.connect(MQTT_URL);
+
+  mqttClient.on("connect", () => {
+    console.log("✅ MQTT connected");
+
+    mqttClient.subscribe(TOPIC, (err) => {
+      if (err) {
+        console.error("❌ MQTT subscribe error:", err.message);
+      } else {
+        console.log("✅ Subscribed to:", TOPIC);
+      }
     });
+  });
 
-    console.log("📥 zapisano:", data);
-  } catch (e) {
-    console.error("❌ błąd:", e.message);
-  }
-});
+  mqttClient.on("error", (err) => {
+    console.error("❌ MQTT error:", err.message);
+  });
+
+  mqttClient.on("message", async (topic, payload) => {
+    try {
+      const data = JSON.parse(payload.toString());
+
+      await wind.insertOne({
+        speed: data.speed,
+	speed_kmh:data.speed_kmh,
+        vin: data.vin,
+        source: "esp8266",
+        timestamp: new Date()
+      });
+
+      console.log("📥 zapisano:", data);
+
+    } catch (e) {
+      console.error("❌ błąd:", e.message);
+    }
+  });
+
+} catch (e) {
+  console.error("❌ Mongo connection error:", e);
+  process.exit(1);
+}

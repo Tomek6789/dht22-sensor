@@ -108,6 +108,27 @@ def api_wind():
             del r["timestamp"]
     return jsonify(data)
 
+# =============================
+# API: LATEST WIND
+# ============================
+
+@app.route("/api/wind/latest")
+def latest_wind():
+    reading = wind_collection.find_one(
+        {},
+        {"_id": 0},
+        sort=[("timestamp", -1)]
+    )
+
+    if not reading:
+        return jsonify({})
+
+    if "timestamp" in reading:
+        reading["timestamp"] = reading["timestamp"].isoformat()
+
+    return jsonify(reading)
+
+
 # ===============================
 # MAIN
 # ===============================
