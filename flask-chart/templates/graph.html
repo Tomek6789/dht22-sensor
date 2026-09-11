@@ -7,6 +7,31 @@
     <title>Temperatura i Wilgotność</title>
 </head>
 <body>
+<div>
+  Wiatr:
+  <strong id="wind-speed">--</strong> km/h
+</div>
+
+<script>
+async function updateWindSpeed() {
+  try {
+    const response = await fetch('/api/wind/latest');
+    const data = await response.json();
+
+    if (data.speed_kmh !== undefined) {
+      document.getElementById('wind-speed').textContent =
+        data.speed_kmh.toFixed(2);
+    }
+  } catch (error) {
+    console.error('Błąd pobierania prędkości:', error);
+  }
+}
+
+updateWindSpeed();
+
+setInterval(updateWindSpeed, 1000);
+</script>
+
     <h1>Temperatura - {{ current_temp }}</h1>
     <canvas id="temperatureChart" width="900" height="400"></canvas>
     <h1>Wilgotność</h1>

@@ -43,6 +43,8 @@ services:
     build: ./mqtt-bridge
     container_name: mqtt-bridge
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - mongo
 
